@@ -3,7 +3,7 @@ import tensorflow as tf
 path = 'data/train'
 (img_height, img_width) = 512, 512
 (input_height, input_width) = (224, 224)
-N_CLASSES = 104
+N_CLASSES = 22
 BATCH_SIZE = 36
 
 train_data = tf.keras.utils.image_dataset_from_directory(
@@ -66,22 +66,25 @@ class PatchedModel(tf.keras.Model):
         super(PatchedModel, self).__init__()
         self.backbone = tf.keras.applications.convnext.ConvNeXtTiny(
             include_top=False,
-            weights='imagenet')
+            weights='imagenet',
+        pooling='max')
         self.backbone.trainable = False
 
-        self.global_avg_pooling = tf.keras.layers.GlobalMaxPool2D()
+        self.global_max_pooling = tf.keras.layers.GlobalMaxPool1D()
         self.output_layer = tf.keras.layers.Dense(N_CLASSES, activation="softmax")
 
     def call(self, inputs):
         embeddings = []
         for i in range(5):
             embeddings.append(self.backbone(inputs[:, i]))
-        embeddings_stacked = tf.concat(embeddings, axis=-1)
-        embedding = self.global_avg_pooling(embeddings_stacked)
+        embeddings_stacked = tf.stack(embeddings, axis=1)
+        embedding = self.global_max_pooling(embeddings_stacked)
         output = self.output_layer(embedding)
         return output
 
 
 model = PatchedModel()
 model.compile(loss="sparse_categorical_crossentropy", optimizer='adam', metrics=["accuracy"])
+model.evaluate(val_ds)
+print(model.summary())
 model.fit(train_ds, validation_data=val_ds, epochs=5)
